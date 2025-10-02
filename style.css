@@ -53,21 +53,82 @@ body {
 
 #auth-container h1 {
     color: var(--primary-strong);
+    margin-bottom: 20px;
+    font-weight: 500;
 }
 
-#google-signin {
+#auth-box {
+    background: var(--white);
+    padding: 40px;
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+    width: 100%;
+    max-width: 400px;
+}
+
+#auth-box form {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+}
+
+#auth-box input {
+    padding: 12px;
+    border: 1px solid var(--seperator-line);
+    border-radius: 5px;
+    font-size: 16px;
+}
+
+#auth-box button {
     background-color: var(--primary-strong);
     color: var(--white);
     border: none;
-    padding: 12px 24px;
-    font-size: 18px;
-    border-radius: 25px;
+    padding: 12px;
+    font-size: 16px;
+    border-radius: 5px;
     cursor: pointer;
     transition: background-color 0.3s;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 10px;
 }
 
-#google-signin:hover {
+#auth-box button:hover {
     background-color: var(--primary-light);
+}
+
+#google-signin {
+    background-color: #4285F4;
+}
+#google-signin:hover {
+    background-color: #357ae8;
+}
+
+.or-divider {
+    text-align: center;
+    margin: 20px 0;
+    color: var(--text-secondary);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+.or-divider::before, .or-divider::after {
+    content: '';
+    flex-grow: 1;
+    height: 1px;
+    background: var(--seperator-line);
+}
+
+.auth-toggle {
+    text-align: center;
+    margin-top: 20px;
+    font-size: 14px;
+}
+.auth-toggle a {
+    color: var(--primary-light);
+    text-decoration: none;
+    font-weight: 600;
 }
 
 /* --- Chat Container (Main View) --- */
@@ -288,27 +349,38 @@ body {
     z-index: 1000;
 }
 
-#videos {
-    display: flex;
+#video-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 10px;
+    width: 100%;
+    height: 100%;
+    padding: 10px;
+    overflow-y: auto;
+}
+
+.video-participant {
     position: relative;
-    width: 100%;
-    height: 100%;
-}
-
-#local-video {
-    width: 25%;
-    max-width: 300px;
-    position: absolute;
-    bottom: 20px;
-    right: 20px;
-    border: 2px solid var(--accent-green);
+    background: black;
     border-radius: 8px;
+    overflow: hidden;
 }
 
-#remote-video {
+.video-participant video {
     width: 100%;
     height: 100%;
-    object-fit: contain;
+    object-fit: cover;
+}
+
+.participant-name {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    background: rgba(0,0,0,0.5);
+    color: white;
+    padding: 5px 10px;
+    font-size: 14px;
+    width: 100%;
 }
 
 #call-controls {

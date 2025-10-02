@@ -1,4 +1,6 @@
 // --- Firebase and Cloudinary Configuration ---
+// WARNING: This is a hardcoded API key. In a production environment,
+// this should be stored securely using environment variables or a secret management service.
 const firebaseConfig = {
     apiKey: "AIzaSyDJCr4z7qwvCxP-t50wHTtMxB95T3S7_SY",
     authDomain: "safe-46480.firebaseapp.com",
@@ -19,11 +21,17 @@ const db = firebase.firestore();
 
 // --- DOM Element Variables ---
 const authContainer = document.getElementById('auth-container');
+const loginFormContainer = document.getElementById('login-form-container');
+const signupFormContainer = document.getElementById('signup-form-container');
+const loginForm = document.getElementById('login-form');
+const signupForm = document.getElementById('signup-form');
+const showSignupBtn = document.getElementById('show-signup');
+const showLoginBtn = document.getElementById('show-login');
+const googleSignInBtn = document.getElementById('google-signin');
 const chatContainer = document.getElementById('chat-container');
 const signOutBtn = document.getElementById('sign-out-menu');
 const userProfilePic = document.getElementById('user-profile-pic');
 const usersList = document.getElementById('users-list');
-const rightPanel = document.getElementById('right-panel');
 const chatHeader = document.getElementById('chat-header');
 const chatPic = document.getElementById('chat-pic');
 const chatName = document.getElementById('chat-name');
@@ -49,71 +57,105 @@ const groupNameInput = document.getElementById('group-name-input');
 const groupMembersList = document.getElementById('group-members-list');
 const createGroupBtn = document.getElementById('create-group-btn');
 const videoContainer = document.getElementById('video-container');
+const videoGrid = document.getElementById('video-grid');
+const localVideoContainer = document.getElementById('local-video-container');
 const localVideo = document.getElementById('local-video');
-const remoteVideo = document.getElementById('remote-video');
 const endCallBtn = document.getElementById('end-call-btn');
 
 // --- Global State ---
 let currentUser = null;
 let currentChatId = null;
-let currentChatPartner = null; // Can be a user object or a group object
-let currentChatMembers = {}; // Cache for group member data
+let currentChatPartner = null;
+let currentChatMembers = {};
 let unsubscribeMessages = null;
-let unsubscribeCalls = null;
-let allUsers = {}; // Cache for all user data
+let allUsers = {};
+let oneToOneCallListener = null;
 
-// WebRTC State
-let pc;
+// --- Call State ---
 let localStream;
-let makingCall = false;
-let callDocRef = null;
-let unsubscribeCallDoc = null;
-let unsubscribeCalleeCandidates = null;
-let unsubscribeCallerCandidates = null;
+let isCallActive = false;
+let oneToOneCallDocRef = null;
+let groupCallConnections = {};
+let groupCallListeners = [];
 const configuration = { iceServers: [{ urls: ['stun:stun1.l.google.com:19302', 'stun:stun2.l.google.com:19302'] }] };
 
-// --- Authentication ---
-const provider = new firebase.auth.GoogleAuthProvider();
-document.getElementById('google-signin').onclick = () => auth.signInWithPopup(provider);
-signOutBtn.onclick = () => auth.signOut();
-
+// --- Authentication & Initialization ---
 auth.onAuthStateChanged(async user => {
     if (user) {
         currentUser = user;
         authContainer.style.display = 'none';
         chatContainer.style.display = 'flex';
-
-        await prefetchUsers(); // Fetch all user data at startup
+        await prefetchUsers();
 
         const userRef = db.collection('users').doc(user.uid);
         userRef.onSnapshot(doc => {
+            let userData;
             if (doc.exists) {
-                const userData = doc.data();
-                currentUser.displayName = userData.displayName;
-                currentUser.photoURL = userData.photoURL;
-                currentUser.status = userData.status || 'Hey there! I am using WhatsApp.';
-                updateProfileUI(currentUser);
+                userData = doc.data();
             } else {
-                const newUser = {
-                    uid: user.uid, displayName: user.displayName, photoURL: user.photoURL,
-                    email: user.email, status: 'Hey there! I am using WhatsApp.',
+                userData = {
+                    uid: user.uid,
+                    displayName: user.displayName || 'New User',
+                    photoURL: user.photoURL || `https://ui-avatars.com/api/?name=${encodeURIComponent(user.displayName || 'N A')}&background=random`,
+                    email: user.email,
+                    status: 'Hey there! I am using WhatsApp Clone.',
                     lastSeen: firebase.firestore.FieldValue.serverTimestamp()
                 };
-                userRef.set(newUser).then(() => updateProfileUI(newUser));
+                userRef.set(userData);
             }
+            currentUser.displayName = userData.displayName;
+            currentUser.photoURL = userData.photoURL;
+            currentUser.status = userData.status;
+            allUsers[user.uid] = userData;
+            updateProfileUI(currentUser);
         });
 
         loadChats();
-        setupIncomingCallListener(user.uid);
+        listenForIncomingOneToOneCalls(user.uid);
     } else {
         currentUser = null;
         authContainer.style.display = 'flex';
         chatContainer.style.display = 'none';
         if (unsubscribeMessages) unsubscribeMessages();
-        if (unsubscribeCalls) unsubscribeCalls();
-        if (unsubscribeCallDoc) unsubscribeCallDoc();
+        if (oneToOneCallListener) oneToOneCallListener();
+        groupCallListeners.forEach(unsubscribe => unsubscribe());
+        groupCallListeners = [];
     }
 });
+
+const provider = new firebase.auth.GoogleAuthProvider();
+googleSignInBtn.onclick = () => auth.signInWithPopup(provider);
+signOutBtn.onclick = () => auth.signOut();
+showSignupBtn.onclick = e => { e.preventDefault(); loginFormContainer.style.display = 'none'; signupFormContainer.style.display = 'block'; };
+showLoginBtn.onclick = e => { e.preventDefault(); signupFormContainer.style.display = 'none'; loginFormContainer.style.display = 'block'; };
+
+signupForm.addEventListener('submit', async e => {
+    e.preventDefault();
+    const name = e.target['signup-name'].value;
+    const email = e.target['signup-email'].value;
+    const password = e.target['signup-password'].value;
+    if (!name || !email || !password) return alert("All fields are required.");
+    try {
+        const cred = await auth.createUserWithEmailAndPassword(email, password);
+        await cred.user.updateProfile({ displayName: name });
+    } catch (error) { console.error("Sign up error:", error); alert(error.message); }
+});
+
+loginForm.addEventListener('submit', async e => {
+    e.preventDefault();
+    const email = e.target['login-email'].value;
+    const password = e.target['login-password'].value;
+    try {
+        await auth.signInWithEmailAndPassword(email, password);
+    } catch (error) { console.error("Login error:", error); alert(error.message); }
+});
+
+
+// --- User & Profile Management ---
+async function prefetchUsers() {
+    const snapshot = await db.collection('users').get();
+    snapshot.forEach(doc => allUsers[doc.id] = doc.data());
+}
 
 function updateProfileUI(user) {
     if (user.photoURL) {
@@ -122,12 +164,6 @@ function updateProfileUI(user) {
     }
     profileNameInput.value = user.displayName;
     profileStatusInput.value = user.status || '';
-}
-
-// --- User & Profile Management ---
-async function prefetchUsers() {
-    const snapshot = await db.collection('users').get();
-    snapshot.forEach(doc => allUsers[doc.id] = doc.data());
 }
 
 userProfilePic.onclick = () => profileModal.style.display = 'flex';
@@ -160,6 +196,7 @@ saveProfileBtn.onclick = async () => {
     } catch (error) { console.error('Profile Save Error:', error); alert('Failed to save profile.'); }
 };
 
+
 // --- Group Chat ---
 newGroupBtn.onclick = () => {
     populateGroupMembers();
@@ -186,7 +223,7 @@ createGroupBtn.onclick = async () => {
     if (selectedMembers.length === 0) return alert('Please select at least one member.');
 
     try {
-        const groupRef = await db.collection('chats').add({
+        await db.collection('chats').add({
             groupName: groupName,
             members: [currentUser.uid, ...selectedMembers],
             createdAt: firebase.firestore.FieldValue.serverTimestamp(),
@@ -200,6 +237,7 @@ createGroupBtn.onclick = async () => {
     } catch (error) { console.error("Group Creation Error:", error); }
 };
 
+
 // --- Chat List & Messaging ---
 function loadChats() {
     db.collection('chats').where('members', 'array-contains', currentUser.uid).orderBy('lastActivity', 'desc')
@@ -209,8 +247,12 @@ function loadChats() {
 
         snapshot.docs.forEach(doc => {
             const chat = { id: doc.id, ...doc.data() };
-            if (!chat.isGroup) chat.members.forEach(m => usersWithChats.add(m));
-            chatListItems.push(createChatListItem(chat));
+            if (chat.isGroup) {
+                chatListItems.push(createChatListItem(chat));
+            } else {
+                chat.members.forEach(m => usersWithChats.add(m));
+                chatListItems.push(createChatListItem(chat));
+            }
         });
 
         Object.values(allUsers).forEach(user => {
@@ -253,7 +295,6 @@ async function startChat(chatData) {
     currentChatId = chatData.id;
     currentChatPartner = chatData.isGroup ? chatData : chatData.partner;
     currentChatMembers = {};
-
     welcomeScreen.style.display = 'none';
     chatHeader.classList.remove('hidden');
     messageForm.classList.remove('hidden');
@@ -261,19 +302,17 @@ async function startChat(chatData) {
     if (chatData.isGroup) {
         chatPic.src = chatData.groupPhotoURL;
         chatName.innerText = chatData.groupName;
-        videoCallBtn.style.display = 'none';
-        for (const memberId of chatData.members) {
-            currentChatMembers[memberId] = allUsers[memberId] || (await db.collection('users').doc(memberId).get()).data();
-        }
+        videoCallBtn.style.display = 'block';
+        videoCallBtn.onclick = () => joinGroupCall();
+        listenForIncomingGroupCalls();
     } else {
         chatPic.src = chatData.partner.photoURL || 'https://via.placeholder.com/40';
         chatName.innerText = chatData.partner.displayName;
         videoCallBtn.style.display = 'block';
+        videoCallBtn.onclick = () => startOneToOneCall();
     }
-
     document.querySelectorAll('.user-chat-item.active').forEach(el => el.classList.remove('active'));
     document.querySelector(`.user-chat-item[data-chat-id='${currentChatId}']`)?.classList.add('active');
-
     loadMessages();
 }
 
@@ -295,12 +334,12 @@ function displayMessage(msg) {
 
     let content = '';
     if (currentChatPartner.isGroup && !isSent && msg.sender !== 'system') {
-        const senderName = (currentChatMembers[msg.sender] || {}).displayName || '...';
+        const senderName = (allUsers[msg.sender] || {}).displayName || '...';
         content += `<div class="sender-name" style="font-weight: bold; font-size: 0.8em; color: var(--primary-strong); margin-bottom: 4px;">${senderName}</div>`;
     }
 
     if (msg.type === 'image') {
-        content += `<img src="${msg.url}" alt="Chat Image" class="chat-image">`;
+        content += `<img src="${msg.url}" alt="Chat Image" class="chat-image" style="max-width:100%; border-radius: 6px;">`;
     } else if (msg.type === 'system') {
         bubble.style.cssText = 'align-self: center; background-color: #e1f2fb; color: #5a7789; font-size: 0.85em;';
         content = msg.text;
@@ -319,125 +358,205 @@ async function sendMessage(messageData) {
     const timestamp = firebase.firestore.FieldValue.serverTimestamp();
 
     if (!doc.exists) {
-        await chatRef.set({ isGroup: false, members: [currentUser.uid, currentChatPartner.uid] });
+        await chatRef.set({ isGroup: false, members: [currentUser.uid, currentChatPartner.uid], lastActivity: timestamp });
     }
     await chatRef.collection('messages').add({ ...messageData, createdAt: timestamp });
     await chatRef.update({ lastActivity: timestamp, lastMessage: { text: messageData.type === 'image' ? '📷 Photo' : messageData.text, sender: messageData.sender }});
 }
 
-messageForm.addEventListener('submit', e => {
-    e.preventDefault();
-    const text = messageInput.value.trim();
-    if (text) {
-        messageInput.value = '';
-        sendMessage({ text: text, sender: currentUser.uid, type: 'text' });
-    }
-});
-
+messageForm.addEventListener('submit', e => { e.preventDefault(); const text = messageInput.value.trim(); if (text) { messageInput.value = ''; sendMessage({ text: text, sender: currentUser.uid, type: 'text' }); } });
 attachmentBtn.onclick = () => imageUploadInput.click();
-imageUploadInput.onchange = async e => {
-    const file = e.target.files[0];
-    if (!file || !currentChatId) return;
-    const formData = new FormData();
-    formData.append('file', file);
-    formData.append('upload_preset', CLOUDINARY_UPLOAD_PRESET);
-    try {
-        const res = await fetch(CLOUDINARY_UPLOAD_URL, { method: 'POST', body: formData });
-        const data = await res.json();
-        if (data.secure_url) sendMessage({ url: data.secure_url, sender: currentUser.uid, type: 'image' });
-    } catch (error) { console.error('Image Upload Error:', error); }
-};
+imageUploadInput.onchange = async e => { const file = e.target.files[0]; if (!file || !currentChatId) return; const formData = new FormData(); formData.append('file', file); formData.append('upload_preset', CLOUDINARY_UPLOAD_PRESET); try { const res = await fetch(CLOUDINARY_UPLOAD_URL, { method: 'POST', body: formData }); const data = await res.json(); if (data.secure_url) sendMessage({ url: data.secure_url, sender: currentUser.uid, type: 'image' }); } catch (error) { console.error('Image Upload Error:', error); } };
+
 
 // --- WebRTC Video Calling ---
-function setupIncomingCallListener(userId) {
-    if (unsubscribeCalls) unsubscribeCalls();
-    unsubscribeCalls = db.collection('calls').where('callee', '==', userId).where('status', '==', 'ringing')
+
+// 1-on-1 Calls
+function listenForIncomingOneToOneCalls(userId) {
+    if (oneToOneCallListener) oneToOneCallListener();
+    oneToOneCallListener = db.collection('oneToOneCalls').where('callee', '==', userId).where('status', '==', 'ringing')
         .onSnapshot(snapshot => {
             snapshot.docChanges().forEach(async change => {
-                if (change.type === 'added') {
-                    if (videoContainer.style.display === 'flex') return;
+                if (change.type === 'added' && !isCallActive) {
                     const callData = change.doc.data();
-                    const callerInfo = allUsers[callData.caller] || (await db.collection('users').doc(callData.caller).get()).data();
+                    const callerInfo = allUsers[callData.caller] || {};
                     if (confirm(`Incoming call from ${callerInfo.displayName}. Answer?`)) {
-                        await answerCall(change.doc.id, callData.offer);
+                        await answerOneToOneCall(change.doc.id, callData.offer);
                     } else {
-                        await change.doc.ref.update({ status: 'rejected' });
+                        await db.collection('oneToOneCalls').doc(change.doc.id).update({ status: 'rejected' });
                     }
                 }
             });
         });
 }
 
-videoCallBtn.onclick = async () => {
+async function startOneToOneCall() {
     if (!currentChatPartner || currentChatPartner.isGroup) return;
-    makingCall = true;
-    callDocRef = db.collection('calls').doc(currentChatId);
-    pc = new RTCPeerConnection(configuration);
-    registerPeerConnectionListeners();
+    isCallActive = true;
+    oneToOneCallDocRef = db.collection('oneToOneCalls').doc(currentChatId);
+    groupCallConnections['peer'] = new RTCPeerConnection(configuration);
+    registerPeerConnectionListeners(groupCallConnections['peer'], 'peer');
     localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
     localVideo.srcObject = localStream;
-    localStream.getTracks().forEach(track => pc.addTrack(track, localStream));
-    const offer = await pc.createOffer();
-    await pc.setLocalDescription(offer);
-    await callDocRef.set({ offer: { sdp: offer.sdp, type: offer.type }, caller: currentUser.uid, callee: currentChatPartner.uid, status: 'ringing' });
+    localStream.getTracks().forEach(track => groupCallConnections['peer'].addTrack(track, localStream));
+    const offer = await groupCallConnections['peer'].createOffer();
+    await groupCallConnections['peer'].setLocalDescription(offer);
+    await oneToOneCallDocRef.set({ offer: { sdp: offer.sdp, type: offer.type }, caller: currentUser.uid, callee: currentChatPartner.uid, status: 'ringing' });
     videoContainer.style.display = 'flex';
-    listenForCallUpdates();
-};
-
-async function answerCall(callId, offer) {
-    callDocRef = db.collection('calls').doc(callId);
-    pc = new RTCPeerConnection(configuration);
-    registerPeerConnectionListeners();
-    localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
-    localVideo.srcObject = localStream;
-    localStream.getTracks().forEach(track => pc.addTrack(track, localStream));
-    await pc.setRemoteDescription(new RTCSessionDescription(offer));
-    const answer = await pc.createAnswer();
-    await pc.setLocalDescription(answer);
-    await callDocRef.update({ answer: { type: answer.type, sdp: answer.sdp }, status: 'connected' });
-    videoContainer.style.display = 'flex';
-    listenForCallUpdates();
+    listenForOneToOneCallUpdates();
 }
 
-function listenForCallUpdates() {
-    unsubscribeCallDoc = callDocRef.onSnapshot(async (snapshot) => {
+async function answerOneToOneCall(callId, offer) {
+    isCallActive = true;
+    oneToOneCallDocRef = db.collection('oneToOneCalls').doc(callId);
+    groupCallConnections['peer'] = new RTCPeerConnection(configuration);
+    registerPeerConnectionListeners(groupCallConnections['peer'], 'peer');
+    localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+    localVideo.srcObject = localStream;
+    localStream.getTracks().forEach(track => groupCallConnections['peer'].addTrack(track, localStream));
+    await groupCallConnections['peer'].setRemoteDescription(new RTCSessionDescription(offer));
+    const answer = await groupCallConnections['peer'].createAnswer();
+    await groupCallConnections['peer'].setLocalDescription(answer);
+    await oneToOneCallDocRef.update({ answer: { type: answer.type, sdp: answer.sdp }, status: 'connected' });
+    videoContainer.style.display = 'flex';
+    listenForOneToOneCallUpdates();
+}
+
+function listenForOneToOneCallUpdates() {
+    const unsubscribe = oneToOneCallDocRef.onSnapshot(async (snapshot) => {
         const data = snapshot.data();
-        if (!pc.currentRemoteDescription && data?.answer && !makingCall) {
-            await pc.setRemoteDescription(new RTCSessionDescription(data.answer));
+        if (!groupCallConnections['peer'].currentRemoteDescription && data?.answer) {
+            await groupCallConnections['peer'].setRemoteDescription(new RTCSessionDescription(data.answer));
         }
         if (data?.status === 'ended' || data?.status === 'rejected') hangUp();
     });
-    const candidatesCollection = makingCall ? callDocRef.collection('calleeCandidates') : callDocRef.collection('callerCandidates');
-    unsubscribeCalleeCandidates = candidatesCollection.onSnapshot(snapshot => {
+    groupCallListeners.push(unsubscribe);
+}
+
+// Group Calls
+function listenForIncomingGroupCalls() {
+    const callDocRef = db.collection('groupCalls').doc(currentChatId);
+    const membersRef = callDocRef.collection('members');
+    const unsubscribe = membersRef.onSnapshot(snapshot => {
         snapshot.docChanges().forEach(change => {
-            if (change.type === 'added') pc.addIceCandidate(new RTCIceCandidate(change.doc.data()));
+            if (change.type === 'added' && change.doc.id !== currentUser.uid && isCallActive) {
+                connectToPeer(change.doc.id, false);
+            }
+            if (change.type === 'removed') {
+                handlePeerDisconnect(change.doc.id);
+            }
         });
+    });
+    groupCallListeners.push(unsubscribe);
+}
+
+async function joinGroupCall() {
+    if (!currentChatId || !currentChatPartner.isGroup) return;
+    isCallActive = true;
+    videoContainer.style.display = 'flex';
+    localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+    localVideo.srcObject = localStream;
+
+    const callDocRef = db.collection('groupCalls').doc(currentChatId);
+    const memberRef = callDocRef.collection('members').doc(currentUser.uid);
+    await memberRef.set({ name: currentUser.displayName, joinedAt: Date.now() });
+
+    const otherMembersSnapshot = await callDocRef.collection('members').get();
+    otherMembersSnapshot.forEach(doc => {
+        if (doc.id !== currentUser.uid) {
+            connectToPeer(doc.id, true);
+        }
     });
 }
 
-function registerPeerConnectionListeners() {
-    pc.onicecandidate = e => e.candidate && (makingCall ? callDocRef.collection('callerCandidates') : callDocRef.collection('calleeCandidates')).add(e.candidate.toJSON());
-    pc.ontrack = e => remoteVideo.srcObject = e.streams[0];
-    pc.onconnectionstatechange = () => (pc.connectionState === 'disconnected' || pc.connectionState === 'closed' || pc.connectionState === 'failed') && hangUp();
+function connectToPeer(peerUid, isInitiator) {
+    const pc = new RTCPeerConnection(configuration);
+    groupCallConnections[peerUid] = pc;
+    registerPeerConnectionListeners(pc, peerUid, isInitiator);
+    localStream.getTracks().forEach(track => pc.addTrack(track, localStream));
+}
+
+function registerPeerConnectionListeners(pc, peerUid, isInitiator = false) {
+    pc.ontrack = event => handleRemoteTrack(event, peerUid);
+    pc.onicecandidate = event => {
+        if (event.candidate) {
+            const ref = oneToOneCallDocRef ? oneToOneCallDocRef.collection(isInitiator ? 'callerCandidates' : 'calleeCandidates') : db.collection('groupCalls').doc(currentChatId).collection('members').doc(currentUser.uid).collection('signals').doc(peerUid).collection('iceCandidates');
+            ref.add(event.candidate.toJSON());
+        }
+    };
+
+    if (oneToOneCallDocRef) {
+        const iceCandidatesRef = oneToOneCallDocRef.collection(isInitiator ? 'calleeCandidates' : 'callerCandidates');
+        groupCallListeners.push(iceCandidatesRef.onSnapshot(snapshot => snapshot.docChanges().forEach(change => change.type === 'added' && pc.addIceCandidate(new RTCIceCandidate(change.doc.data())))));
+    } else { // Group Call
+        const signalsRef = db.collection('groupCalls').doc(currentChatId).collection('members').doc(peerUid).collection('signals').doc(currentUser.uid);
+        groupCallListeners.push(signalsRef.collection('iceCandidates').onSnapshot(snapshot => snapshot.docChanges().forEach(change => change.type === 'added' && pc.addIceCandidate(new RTCIceCandidate(change.doc.data())))));
+
+        if (isInitiator) {
+            pc.createOffer().then(offer => pc.setLocalDescription(offer)).then(() => signalsRef.set({ offer: pc.localDescription }));
+        }
+        groupCallListeners.push(signalsRef.onSnapshot(async doc => {
+            if (doc.exists) {
+                const data = doc.data();
+                if (data.offer && !isInitiator) {
+                    await pc.setRemoteDescription(new RTCSessionDescription(data.offer));
+                    const answer = await pc.createAnswer();
+                    await pc.setLocalDescription(answer);
+                    signalsRef.set({ answer: pc.localDescription });
+                }
+                if (data.answer && isInitiator) {
+                    await pc.setRemoteDescription(new RTCSessionDescription(data.answer));
+                }
+            }
+        }));
+    }
+}
+
+function handleRemoteTrack(event, peerUid) {
+    let videoContainerEl = document.getElementById(`video-${peerUid}`);
+    if (!videoContainerEl) {
+        videoContainerEl = document.createElement('div');
+        videoContainerEl.id = `video-${peerUid}`;
+        videoContainerEl.className = 'video-participant';
+        const name = (allUsers[peerUid] || {}).displayName || 'Peer';
+        videoContainerEl.innerHTML = `<video autoplay playsinline></video><div class="participant-name">${name}</div>`;
+        videoGrid.appendChild(videoContainerEl);
+    }
+    videoContainerEl.querySelector('video').srcObject = event.streams[0];
+}
+
+function handlePeerDisconnect(peerUid) {
+    if (groupCallConnections[peerUid]) {
+        groupCallConnections[peerUid].close();
+        delete groupCallConnections[peerUid];
+    }
+    const videoContainerEl = document.getElementById(`video-${peerUid}`);
+    if (videoContainerEl) videoContainerEl.remove();
 }
 
 async function hangUp() {
     if (localStream) localStream.getTracks().forEach(track => track.stop());
-    if (pc) { pc.close(); pc = null; }
-    if (callDocRef) {
-        const callData = (await callDocRef.get()).data();
-        if(callData && callData.status !== 'ended') await callDocRef.update({ status: 'ended' });
+    Object.values(groupCallConnections).forEach(pc => pc.close());
+    groupCallConnections = {};
+
+    if (isCallActive && currentChatPartner.isGroup) {
+        const memberRef = db.collection('groupCalls').doc(currentChatId).collection('members').doc(currentUser.uid);
+        await memberRef.delete().catch(() => {});
     }
-    if (unsubscribeCallDoc) unsubscribeCallDoc();
-    if (unsubscribeCalleeCandidates) unsubscribeCalleeCandidates();
-    if (unsubscribeCallerCandidates) unsubscribeCallerCandidates();
+
+    if (oneToOneCallDocRef) {
+        const callData = (await oneToOneCallDocRef.get()).data();
+        if(callData && callData.status !== 'ended') await oneToOneCallDocRef.update({ status: 'ended' });
+        oneToOneCallDocRef = null;
+    }
+
+    groupCallListeners.forEach(unsubscribe => unsubscribe());
+    groupCallListeners = [];
+    videoGrid.innerHTML = '';
+    videoGrid.appendChild(localVideoContainer);
     videoContainer.style.display = 'none';
-    localVideo.srcObject = null;
-    remoteVideo.srcObject = null;
-    makingCall = false;
-    callDocRef = null;
+    isCallActive = false;
 }
 
 endCallBtn.onclick = hangUp;
-
 console.log("WhatsApp Clone script loaded.");
