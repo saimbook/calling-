@@ -1,72 +1,115 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-  <title>Wireless Calling System</title>
-  <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-database-compat.js"></script>
-  <style>
-    body {
-      font-family: Arial;
-      text-align: center;
-      padding: 50px;
-      background: #f5f5f5;
-    }
-    h1 {
-      color: #333;
-    }
-    button {
-      font-size: 20px;
-      padding: 15px 30px;
-      margin: 20px;
-      border: none;
-      border-radius: 10px;
-      cursor: pointer;
-      background-color: #4CAF50;
-      color: white;
-    }
-    .nurse {
-      background-color: #2196F3;
-    }
-  </style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chat App</title>
+    <link rel="stylesheet" href="style.css">
+    <!-- Firebase SDKs -->
+    <script src="https://www.gstatic.com/firebasejs/8.6.1/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.6.1/firebase-auth.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.6.1/firebase-firestore.js"></script>
+    <!-- Font Awesome for icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
 </head>
 <body>
 
-  <h1>📞 Wireless Calling System</h1>
+    <div class="container">
+        <!-- Authentication Section -->
+        <div id="auth-container">
+            <!-- Login/Signup Forms -->
+            <form id="login-form">
+                <h2>Login to ChatApp</h2>
+                <input type="email" id="login-email" placeholder="Email" required>
+                <input type="password" id="login-password" placeholder="Password" required>
+                <button type="submit">LOGIN</button>
+                <p id="toggle-to-signup">Don't have an account? Sign Up</p>
+            </form>
+            <form id="signup-form" style="display: none;">
+                <h2>Create Account</h2>
+                <input type="email" id="signup-email" placeholder="Email" required>
+                <input type="password" id="signup-password" placeholder="Password" required>
+                <button type="submit">SIGN UP</button>
+                <p id="toggle-to-login">Already have an account? Login</p>
+            </form>
+        </div>
 
-  <button onclick="callPerson('Waiter', 'Table 1')">Call Waiter</button>
-  <button class="nurse" onclick="callPerson('Nurse', 'Bed 5')">Call Nurse</button>
+        <!-- Chat Section -->
+        <div id="chat-container">
+            <header>
+                <div id="chat-info">
+                    <h2 id="current-chat-name">Select a Chat</h2>
+                </div>
+                <div id="header-icons">
+                    <button id="audio-call-btn" class="header-icon-btn hidden" title="Start Audio Call"><i class="fas fa-phone"></i></button>
+                    <button id="video-call-btn" class="header-icon-btn hidden" title="Start Video Call"><i class="fas fa-video"></i></button>
+                    <button id="logout-btn" class="header-icon-btn" title="Logout"><i class="fas fa-sign-out-alt"></i></button>
+                </div>
+            </header>
+            <div class="main-content">
+                <aside id="sidebar">
+                    <!-- Tabs for Groups and Users -->
+                    <div id="sidebar-tabs">
+                        <button class="tab-btn active" data-tab="groups">Groups</button>
+                        <button class="tab-btn" data-tab="users">Users</button>
+                    </div>
+                    <div class="sidebar-content">
+                        <!-- Groups Tab Content -->
+                        <div id="groups-content" class="tab-content active">
+                            <ul id="group-list"></ul>
+                            <form id="create-group-form">
+                                <input type="text" id="group-name-input" placeholder="Create new group" required>
+                                <button type="submit" title="Create Group"><i class="fas fa-plus"></i></button>
+                            </form>
+                        </div>
+                        <!-- Users Tab Content -->
+                        <div id="users-content" class="tab-content">
+                            <ul id="user-list"></ul>
+                        </div>
+                    </div>
+                </aside>
+                <main id="chat-area">
+                    <div id="messages">
+                        <!-- Welcome screen or messages -->
+                        <div class="welcome-screen">
+                            <i class="fas fa-comments"></i>
+                            <p>Select a group or user to start chatting.</p>
+                        </div>
+                    </div>
+                    <form id="message-form" class="hidden">
+                        <input type="text" id="message-input" placeholder="Type a message" autocomplete="off">
+                        <button type="submit" title="Send"><i class="fas fa-paper-plane"></i></button>
+                    </form>
+                </main>
+            </div>
+        </div>
 
-  <p id="status"></p>
+        <!-- Video Call Modal -->
+        <div id="video-call-modal" class="hidden">
+            <div class="video-container">
+                <video id="remote-video" autoplay playsinline></video>
+                <video id="local-video" autoplay playsinline muted></video>
+            </div>
+            <div class="call-controls">
+                <button id="mic-btn" class="control-btn" title="Mute/Unmute Mic"><i class="fas fa-microphone"></i></button>
+                <button id="cam-btn" class="control-btn" title="Turn Camera On/Off"><i class="fas fa-video"></i></button>
+                <button id="hangup-btn" class="control-btn hangup" title="Hang Up"><i class="fas fa-phone-slash"></i></button>
+            </div>
+        </div>
 
-  <script>
-    // আপনার Firebase Config এখানে বসান
-    const firebaseConfig = {
-      apiKey: "AIzaSyDJCr4z7qwvCxP-t50wHTtMxB95T3S7_SY",
-      authDomain: "safe-46480.firebaseapp.com",
-      databaseURL: "https://safe-46480-default-rtdb.firebaseio.com",
-      projectId: "safe-46480",
-      storageBucket: "safe-46480.firebasestorage.app",
-      messagingSenderId: "612208138762",
-      appId: "1:612208138762:web:b53f1d26b7f9322c94ddf3"
-    };
+        <!-- Incoming Call Notification -->
+        <div id="incoming-call-modal" class="hidden">
+            <div class="modal-content">
+                <p id="caller-name"></p>
+                <div class="modal-buttons">
+                    <button id="accept-call-btn" class="accept" title="Accept Call"><i class="fas fa-phone"></i> Accept</button>
+                    <button id="decline-call-btn" class="decline" title="Decline Call"><i class="fas fa-phone-slash"></i> Decline</button>
+                </div>
+            </div>
+        </div>
 
-    // Initialize Firebase
-    firebase.initializeApp(firebaseConfig);
-    const db = firebase.database();
+    </div>
 
-    function callPerson(role, location) {
-      const time = new Date().toLocaleString();
-      db.ref("calls/" + Date.now()).set({
-        role: role,
-        location: location,
-        time: time
-      }).then(() => {
-        document.getElementById("status").innerText = role + " called at " + location + " ✅";
-      }).catch((error) => {
-        document.getElementById("status").innerText = "❌ Error: " + error;
-      });
-    }
-  </script>
-
+    <script src="script.js"></script>
 </body>
 </html>
