@@ -210,6 +210,16 @@ body {
     color: var(--text-primary);
 }
 
+#chat-header-info .status {
+    font-size: 13px;
+    color: var(--text-secondary);
+}
+
+.user-chat-info .last-message.typing-indicator {
+    color: var(--accent-green);
+    font-weight: 500;
+}
+
 /* --- Right Panel (Chat Area) --- */
 #right-panel {
     display: flex;
@@ -268,6 +278,28 @@ body {
     margin-bottom: 10px;
     word-wrap: break-word;
     box-shadow: 0 1px 1px rgba(0,0,0,0.1);
+    position: relative;
+    min-height: 20px; /* Ensure space for status icon */
+}
+
+.message-content {
+    margin-bottom: 15px; /* Space for timestamp and status */
+}
+
+.message-meta {
+    position: absolute;
+    bottom: 5px;
+    right: 10px;
+    font-size: 11px;
+    color: var(--text-secondary);
+}
+
+.message-status i {
+    margin-left: 5px;
+}
+
+.message-status .seen {
+    color: #53bdeb; /* WhatsApp's blue tick color */
 }
 
 .message-bubble.sent {

@@ -11,6 +11,8 @@
     <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore-compat.js"></script>
+    <!-- Emoji Picker Library -->
+    <script type="module" src="https://cdn.jsdelivr.net/npm/emoji-picker-element@^1/index.js"></script>
 </head>
 <body>
 
@@ -67,6 +69,7 @@
                     <img id="chat-pic" src="https://via.placeholder.com/40" alt="Chat Profile">
                     <div id="chat-header-info">
                         <div id="chat-name" class="name"></div>
+                        <div id="chat-status" class="status"></div>
                     </div>
                     <div id="chat-header-icons">
                         <i id="video-call-btn" class="fa-solid fa-video"></i>
@@ -85,6 +88,10 @@
                 </div>
 
                 <form id="message-form" class="hidden">
+                    <div id="emoji-picker-container" style="position: relative;">
+                        <button type="button" id="emoji-btn"><i class="fa-regular fa-face-smile"></i></button>
+                        <emoji-picker id="emoji-picker" class="light" style="position: absolute; bottom: 50px; left: 10px; display: none;"></emoji-picker>
+                    </div>
                     <button type="button" id="attachment-btn"><i class="fa-solid fa-paperclip"></i></button>
                     <input type="file" id="image-upload" accept="image/*" style="display:none;">
                     <input type="text" id="message-input" placeholder="Type a message">
