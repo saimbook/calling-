@@ -1,72 +1,158 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-  <title>Wireless Calling System</title>
-  <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-database-compat.js"></script>
-  <style>
-    body {
-      font-family: Arial;
-      text-align: center;
-      padding: 50px;
-      background: #f5f5f5;
-    }
-    h1 {
-      color: #333;
-    }
-    button {
-      font-size: 20px;
-      padding: 15px 30px;
-      margin: 20px;
-      border: none;
-      border-radius: 10px;
-      cursor: pointer;
-      background-color: #4CAF50;
-      color: white;
-    }
-    .nurse {
-      background-color: #2196F3;
-    }
-  </style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WhatsApp Clone</title>
+    <link rel="stylesheet" href="style.css">
+    <!-- Font Awesome for icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.1.1/css/all.min.css">
+    <!-- Firebase SDKs -->
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore-compat.js"></script>
+    <!-- Emoji Picker Library -->
+    <script type="module" src="https://cdn.jsdelivr.net/npm/emoji-picker-element@^1/index.js"></script>
 </head>
 <body>
 
-  <h1>📞 Wireless Calling System</h1>
+    <div id="app-container">
+        <!-- Authentication Screen -->
+        <div id="auth-container">
+            <div id="auth-box">
+                <div id="login-form-container">
+                    <h1>Sign In</h1>
+                    <form id="login-form">
+                        <input type="email" id="login-email" placeholder="Email" required>
+                        <input type="password" id="login-password" placeholder="Password" required>
+                        <button type="submit">Sign In</button>
+                    </form>
+                    <p class="or-divider"><span>OR</span></p>
+                    <button id="google-signin"><i class="fab fa-google"></i> Sign in with Google</button>
+                    <p class="auth-toggle">Don't have an account? <a href="#" id="show-signup">Sign Up</a></p>
+                </div>
 
-  <button onclick="callPerson('Waiter', 'Table 1')">Call Waiter</button>
-  <button class="nurse" onclick="callPerson('Nurse', 'Bed 5')">Call Nurse</button>
+                <div id="signup-form-container" style="display: none;">
+                    <h1>Create Account</h1>
+                    <form id="signup-form">
+                        <input type="text" id="signup-name" placeholder="Your Name" required>
+                        <input type="email" id="signup-email" placeholder="Email" required>
+                        <input type="password" id="signup-password" placeholder="Password" required>
+                        <button type="submit">Sign Up</button>
+                    </form>
+                     <p class="auth-toggle">Already have an account? <a href="#" id="show-login">Sign In</a></p>
+                </div>
+            </div>
+        </div>
 
-  <p id="status"></p>
+        <!-- Main Chat Screen -->
+        <div id="chat-container">
+            <!-- Left Panel: User List & Profile -->
+            <div id="left-panel">
+                <header id="left-panel-header">
+                    <img id="user-profile-pic" src="https://via.placeholder.com/40" alt="My Profile">
+                    <div id="left-panel-icons">
+                        <i class="fa-solid fa-users" id="new-group-btn"></i>
+                        <i class="fa-solid fa-circle-notch"></i>
+                        <i class="fa-solid fa-message"></i>
+                        <i class="fa-solid fa-ellipsis-vertical" id="sign-out-menu"></i>
+                    </div>
+                </header>
+                <div id="users-list">
+                    <!-- User chat items will be populated here -->
+                </div>
+            </div>
 
-  <script>
-    // আপনার Firebase Config এখানে বসান
-    const firebaseConfig = {
-      apiKey: "AIzaSyDJCr4z7qwvCxP-t50wHTtMxB95T3S7_SY",
-      authDomain: "safe-46480.firebaseapp.com",
-      databaseURL: "https://safe-46480-default-rtdb.firebaseio.com",
-      projectId: "safe-46480",
-      storageBucket: "safe-46480.firebasestorage.app",
-      messagingSenderId: "612208138762",
-      appId: "1:612208138762:web:b53f1d26b7f9322c94ddf3"
-    };
+            <!-- Right Panel: Chat Window -->
+            <div id="right-panel">
+                <header id="chat-header" class="hidden">
+                    <img id="chat-pic" src="https://via.placeholder.com/40" alt="Chat Profile">
+                    <div id="chat-header-info">
+                        <div id="chat-name" class="name"></div>
+                        <div id="chat-status" class="status"></div>
+                    </div>
+                    <div id="chat-header-icons">
+                        <i id="video-call-btn" class="fa-solid fa-video"></i>
+                        <i class="fa-solid fa-search"></i>
+                        <i class="fa-solid fa-ellipsis-vertical"></i>
+                    </div>
+                </header>
 
-    // Initialize Firebase
-    firebase.initializeApp(firebaseConfig);
-    const db = firebase.database();
+                <div id="messages">
+                    <!-- Welcome screen or messages will be displayed here -->
+                    <div id="welcome-screen">
+                        <img src="https://i.gadgets360cdn.com/large/whatsapp_web_connected_1585678763048.jpg" alt="WhatsApp Web">
+                        <h2>WhatsApp Web</h2>
+                        <p>Send and receive messages without keeping your phone online.<br>Use WhatsApp on up to 4 linked devices and 1 phone at the same time.</p>
+                    </div>
+                </div>
 
-    function callPerson(role, location) {
-      const time = new Date().toLocaleString();
-      db.ref("calls/" + Date.now()).set({
-        role: role,
-        location: location,
-        time: time
-      }).then(() => {
-        document.getElementById("status").innerText = role + " called at " + location + " ✅";
-      }).catch((error) => {
-        document.getElementById("status").innerText = "❌ Error: " + error;
-      });
-    }
-  </script>
+                <form id="message-form" class="hidden">
+                    <div id="emoji-picker-container" style="position: relative;">
+                        <button type="button" id="emoji-btn"><i class="fa-regular fa-face-smile"></i></button>
+                        <emoji-picker id="emoji-picker" class="light" style="position: absolute; bottom: 50px; left: 10px; display: none;"></emoji-picker>
+                    </div>
+                    <button type="button" id="attachment-btn"><i class="fa-solid fa-paperclip"></i></button>
+                    <input type="file" id="image-upload" accept="image/*" style="display:none;">
+                    <input type="text" id="message-input" placeholder="Type a message">
+                    <button type="submit"><i class="fa-solid fa-paper-plane"></i></button>
+                </form>
+            </div>
+        </div>
+    </div>
 
+    <!-- Profile Modal -->
+    <div id="profile-modal" class="modal">
+        <div id="profile-modal-content" class="modal-content">
+            <header id="profile-modal-header" class="modal-header">
+                <h3>Profile</h3>
+                <button id="close-profile-btn"><i class="fa-solid fa-xmark"></i></button>
+            </header>
+            <div id="profile-picture-container">
+                <img id="profile-picture-display" src="https://via.placeholder.com/150" alt="Profile Picture">
+                <label for="upload-picture-input" id="upload-picture-label"><i class="fa-solid fa-camera"></i></label>
+                <input type="file" id="upload-picture-input" accept="image/*" style="display: none;">
+            </div>
+            <div id="profile-info">
+                <input type="text" id="profile-name-input" placeholder="Your Name">
+                <input type="text" id="profile-status-input" placeholder="About">
+            </div>
+            <button id="save-profile-btn">Save</button>
+        </div>
+    </div>
+
+    <!-- New Group Modal -->
+    <div id="new-group-modal" class="modal">
+        <div class="modal-content">
+            <header class="modal-header">
+                <h3>Create New Group</h3>
+                <button id="close-group-modal-btn"><i class="fa-solid fa-xmark"></i></button>
+            </header>
+            <div class="modal-body">
+                <input type="text" id="group-name-input" placeholder="Group Name">
+                <h4>Select Members</h4>
+                <div id="group-members-list">
+                    <!-- User list for group creation will be populated here -->
+                </div>
+                <button id="create-group-btn">Create Group</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Video Call Container -->
+    <div id="video-container">
+        <div id="video-grid">
+            <!-- Local video will be a template and cloned for others -->
+            <div id="local-video-container" class="video-participant">
+                <video id="local-video" autoplay muted playsinline></video>
+                <div class="participant-name">You</div>
+            </div>
+        </div>
+        <div id="call-controls">
+            <button id="end-call-btn"><i class="fa-solid fa-phone-slash"></i></button>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
 </body>
 </html>
